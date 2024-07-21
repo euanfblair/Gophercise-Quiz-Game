@@ -1,9 +1,9 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
-	"os"
 	"strconv"
 	"time"
 
@@ -13,31 +13,53 @@ import (
 
 func main() {
 
-	timerLength := reader.FileFlag("timer", "30", "the timer length in seconds")
+	score := 0
 
-	timeInt, err := strconv.Atoi(timerLength)
+	// Define flags
+	fileName := flag.String("file", "./problems.csv", "the quiz file csv")
+	timerLength := flag.String("timer", "30", "the timer length in seconds")
+
+	// Parse the flags
+	flag.Parse()
+
+	// Validate and convert timer length
+	timeInt, err := strconv.Atoi(*timerLength)
 	if err != nil {
-		fmt.Printf("timer flag should be a whole number")
+		fmt.Printf("timer flag should be a whole number\n")
 		log.Fatal(err)
 	}
 
-	timer := time.NewTimer(time.Duration(timeInt) * time.Second)
+	questions_and_answers, err := reader.ReadCsvToSlice(*fileName)
+	questions := len(questions_and_answers)
+	if err != nil {
+		log.Fatal(err)
+	}
+	// Channel to signal when the quiz is done
+	done := make(chan bool)
 
+	// Run the quiz in a goroutine
 	go func() {
-
-		fileName := reader.FileFlag("file", "./problems.csv", "the quiz file csv")
-
-		questions_and_answers, err := reader.ReadCsvToSlice(fileName)
-		if err != nil {
-			log.Fatal(err)
-		}
-		score, total := quiz.RunQuiz(questions_and_answers)
-		fmt.Print("\033[H\033[2J")
-		fmt.Printf("You scored %d/%d\n", score, total)
-		os.Exit(0)
+		quiz.RunQuiz(questions_and_answers, &score)
+		done <- true
 	}()
 
-	<-timer.C
-	fmt.Println("You ran out of time, better luck next time")
+	// Run the timer concurrently
+	go func() {
+		time.Sleep(time.Duration(timeInt) * time.Second)
+		done <- false
+	}()
+	
+	//Clear terminal 
+	fmt.Print("\033[H\033[2J")
+
+	// Wait for either the quiz to finish or the timer to expire
+	timeUp := <-done
+
+	switch {
+	case !timeUp:
+		fmt.Printf("You ran out of time. You scored %d/%d\n", score, questions)
+	case timeUp:
+		fmt.Printf("You scored %d/%d\n", score, questions)
+	}
 
 }

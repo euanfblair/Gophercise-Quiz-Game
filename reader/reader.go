@@ -36,8 +36,6 @@ func FileFlag(flagName, defaultVal, desc string) string {
 		}
 	}
 
-	flag.Parse()
-
 	if fileProvided {
 		return *fileFlag
 	}
